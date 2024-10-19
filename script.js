@@ -60,7 +60,7 @@ function generateTerrain() {
     let geometry = new THREE.BoxGeometry(1, 1, 1);
     let loader = new THREE.TextureLoader();
 
-    // Load textures from the "textures" folder
+    // Load textures from the "textures" folder (all lowercase)
     let grassTexture = loader.load('textures/grass.png', undefined, undefined, (err) => {
         console.error('Error loading grass texture:', err);
     });
