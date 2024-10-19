@@ -1,261 +1,160 @@
- <!DOCTYPE html>
-<html lang="en">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>2D Procedural Minecraft-like Game</title>
-    <style>
-        body {
-            display: flex;
-            flex-direction: column;
-            align-items: center;
-            background-color: #f0f0f0;
-            font-family: Arial, sans-serif;
-        }
-        canvas {
-            border: 1px solid #000;
-            background-color: #87CEFA; /* Sky color */
-            cursor: crosshair;
-        }
-        #playButton {
-            margin: 20px;
-            padding: 10px 20px;
-            font-size: 16px;
-            cursor: pointer;
-        }
-        #inventory {
-            display: none;
-            margin-top: 20px;
-            padding: 10px;
-            border: 1px solid #000;
-            background-color: white;
-        }
-        .item {
-            margin: 5px 0;
-        }
-        .indicator {
-            width: 5px;
-            height: 5px;
-            background-color: yellow;
-            position: absolute;
-            display: none; /* Hide initially */
-            transform: rotate(0deg);
-            transition: transform 0.1s;
-        }
-    </style>
-</head>
-<body>
-    <h1>2D Procedural Minecraft-like Game</h1>
-    <button id="playButton">Play</button>
-    <canvas id="gameCanvas" width="800" height="600"></canvas>
-    <div id="inventory">
-        <h3>Inventory</h3>
-        <div class="item">Wood: <span id="woodCount">0</span></div>
-    </div>
-    <div class="indicator" id="collectIndicator"></div>
+// script.js
 
-    <script>
-        const canvas = document.getElementById('gameCanvas');
-        const ctx = canvas.getContext('2d');
-        const TILE_SIZE = 40;
-        const VIEW_DISTANCE = 10; // Number of tiles to load in view
-        const PLAYER_SIZE = TILE_SIZE;
-        const WORLD_HEIGHT = 200; // For generating height
+let scene, camera, renderer;
+let player = { height: 1.8, speed: 0.1, turnSpeed: Math.PI * 0.01 };
+let keys = { forward: false, backward: false, left: false, right: false };
 
-        // Tile colors
-        const TILES = {
-            0: '#8B4513',  // Dirt
-            1: '#32CD32',  // Grass
-            2: '#4682B4',  // Water
-            3: '#228B22',  // Tree
-        };
+// Simplex noise for terrain generation
+let noise = new SimplexNoise();
 
-        const player = {
-            x: Math.floor(VIEW_DISTANCE / 2),
-            y: Math.floor(VIEW_DISTANCE / 2),
-            color: 'red',
-            size: PLAYER_SIZE,
-        };
+// Camera rotation variables
+let yaw = 0;
+let pitch = 0;
+const lookSensitivity = 0.002; // Adjust sensitivity as needed
 
-        let inventory = {
-            wood: 0,
-        };
+init();
+animate();
 
-        let world = [];
-        let collecting = false;
-        let collectTimeout;
-        let collectDistance = 3;
-        let collectIndicator = document.getElementById('collectIndicator');
-        let collectTargetX, collectTargetY;
+function init() {
+    scene = new THREE.Scene();
+    camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 1000);
+    
+    renderer = new THREE.WebGLRenderer();
+    renderer.setSize(window.innerWidth, window.innerHeight);
+    document.body.appendChild(renderer.domElement);
+    
+    // Add basic lighting
+    let light = new THREE.DirectionalLight(0xffffff, 1);
+    light.position.set(10, 10, 10).normalize();
+    scene.add(light);
 
-        // Generate Perlin noise-like pattern for tiles
-        function generatePerlinNoise(width, height, scale = 5) {
-            const noiseGrid = [];
+    // Setup controls
+    document.addEventListener('keydown', (event) => handleKey(event, true));
+    document.addEventListener('keyup', (event) => handleKey(event, false));
+    document.addEventListener('mousemove', onMouseMove);
+    window.addEventListener('click', onClick);
+    document.addEventListener('pointerlockchange', onPointerLockChange); // Listen for pointer lock change
+    
+    // Request pointer lock when clicking the canvas
+    document.body.addEventListener('click', () => {
+        document.body.requestPointerLock(); // Lock the mouse pointer
+    });
+
+    // Generate terrain
+    generateTerrain();
+
+    camera.position.set(0, player.height, 5);
+}
+
+function handleKey(event, isPressed) {
+    switch (event.code) {
+        case 'KeyW': keys.forward = isPressed; break;
+        case 'KeyS': keys.backward = isPressed; break;
+        case 'KeyA': keys.left = isPressed; break;
+        case 'KeyD': keys.right = isPressed; break;
+    }
+}
+
+function onMouseMove(event) {
+    if (document.pointerLockElement) { // Only move the camera if pointer is locked
+        yaw -= event.movementX * lookSensitivity;
+        pitch -= event.movementY * lookSensitivity;
+
+        // Clamp pitch to prevent flipping upside down
+        pitch = Math.max(-Math.PI / 2 + 0.01, Math.min(Math.PI / 2 - 0.01, pitch));
+        
+        camera.rotation.order = "YXZ"; // Set rotation order
+        camera.rotation.set(pitch, yaw, 0); // Apply the pitch and yaw
+    }
+}
+
+function generateTerrain() {
+    let geometry = new THREE.BoxGeometry(1, 1, 1);
+    let loader = new THREE.TextureLoader();
+
+    // Load textures from the "textures" folder (all lowercase)
+    let grassTexture = loader.load('textures/grass.png', undefined, undefined, (err) => {
+        console.error('Error loading grass texture:', err);
+    });
+    let dirtTexture = loader.load('textures/dirt.png', undefined, undefined, (err) => {
+        console.error('Error loading dirt texture:', err);
+    });
+    let stoneTexture = loader.load('textures/stone.png', undefined, undefined, (err) => {
+        console.error('Error loading stone texture:', err);
+    });
+
+    // Create terrain using the loaded textures
+    for (let x = -10; x < 10; x++) {
+        for (let z = -10; z < 10; z++) {
+            let height = Math.floor(noise.noise2D(x / 10, z / 10) * 5);
             for (let y = 0; y < height; y++) {
-                const row = [];
-                for (let x = 0; x < width; x++) {
-                    const noiseValue = Math.sin((x + y) / scale);  // Simple noise generation
-                    row.push(noiseValue);
+                let material;
+                // Randomly assign a texture (this can be modified as needed)
+                if (y === 0) {
+                    material = new THREE.MeshBasicMaterial({ map: grassTexture });
+                } else {
+                    material = new THREE.MeshBasicMaterial({ map: dirtTexture });
                 }
-                noiseGrid.push(row);
-            }
-            return noiseGrid;
-        }
 
-        // Generate the world with trees and water
-        function generateWorld(centerX, centerY) {
-            const noiseGrid = generatePerlinNoise(VIEW_DISTANCE * 2, VIEW_DISTANCE * 2, scale=10);
-            const worldChunk = [];
-
-            for (let y = 0; y < VIEW_DISTANCE * 2; y++) {
-                const row = [];
-                for (let x = 0; x < VIEW_DISTANCE * 2; x++) {
-                    let tileType;
-                    const noiseValue = noiseGrid[y][x];
-                    const depth = centerY + y - VIEW_DISTANCE; // Depth calculation for darkness
-
-                    if (noiseValue < -0.5) {
-                        tileType = 2;  // Water
-                    } else if (noiseValue < 0.0) {
-                        tileType = 0;  // Dirt
-                    } else if (Math.random() < 0.1) { // 10% chance for trees
-                        tileType = 3;  // Tree
-                    } else {
-                        tileType = 1;  // Grass
-                    }
-                    row.push(tileType);
-                }
-                worldChunk.push(row);
-            }
-            return worldChunk;
-        }
-
-        // Draw the world and player
-        function drawWorld() {
-            ctx.clearRect(0, 0, canvas.width, canvas.height);
-            const startX = Math.max(0, player.x - VIEW_DISTANCE);
-            const startY = Math.max(0, player.y - VIEW_DISTANCE);
-
-            for (let y = 0; y < VIEW_DISTANCE * 2; y++) {
-                for (let x = 0; x < VIEW_DISTANCE * 2; x++) {
-                    const tile = world[y][x];
-                    ctx.fillStyle = TILES[tile];
-                    ctx.fillRect((x + startX) * TILE_SIZE, (y + startY) * TILE_SIZE, TILE_SIZE, TILE_SIZE);
-                }
-            }
-            // Draw the player
-            ctx.fillStyle = player.color;
-            ctx.fillRect(player.x * TILE_SIZE, player.y * TILE_SIZE, PLAYER_SIZE, PLAYER_SIZE);
-        }
-
-        // Move the player one block in the direction
-        function movePlayer(dx, dy) {
-            const newX = player.x + dx;
-            const newY = player.y + dy;
-
-            // Check if the new position is valid
-            if (newX >= 0 && newY >= 0 && newX < VIEW_DISTANCE * 2 && newY < VIEW_DISTANCE * 2) {
-                player.x = newX;
-                player.y = newY;
-                drawWorld();
+                let block = new THREE.Mesh(geometry, material);
+                block.position.set(x, y, z);
+                scene.add(block);
             }
         }
+    }
+}
 
-        // Collect wood
-        function startCollecting() {
-            const distanceX = player.x - collectTargetX;
-            const distanceY = player.y - collectTargetY;
-            const distance = Math.sqrt(distanceX * distanceX + distanceY * distanceY);
+function onClick(event) {
+    // Detect block clicked on
+    let raycaster = new THREE.Raycaster();
+    let mouse = new THREE.Vector2();
 
-            if (distance <= collectDistance) {
-                collecting = true;
-                collectIndicator.style.display = 'block';
-                collectIndicator.style.left = ${(collectTargetX * TILE_SIZE) + (TILE_SIZE / 2)}px;
-                collectIndicator.style.top = ${(collectTargetY * TILE_SIZE) + (TILE_SIZE / 2)}px;
+    mouse.x = (event.clientX / window.innerWidth) * 2 - 1;
+    mouse.y = -(event.clientY / window.innerHeight) * 2 + 1;
 
-                collectTimeout = setTimeout(() => {
-                    inventory.wood += 1;
-                    document.getElementById('woodCount').innerText = inventory.wood;
-                    world[collectTargetY][collectTargetX] = 1; // Remove the tree
-                    collecting = false;
-                    collectIndicator.style.display = 'none';
-                    drawWorld();
-                }, 3000); // 3 seconds
-            }
-        }
+    raycaster.setFromCamera(mouse, camera);
+    let intersects = raycaster.intersectObjects(scene.children);
 
-        function stopCollecting() {
-            collecting = false;
-            clearTimeout(collectTimeout);
-            collectIndicator.style.display = 'none';
-        }
+    if (intersects.length > 0) {
+        let block = intersects[0].object;
+        scene.remove(block);  // Simulate block breaking
+    }
+}
 
-        // Place wood block
-        function placeWood() {
-            if (inventory.wood > 0) {
-                const tileX = Math.floor(player.x);
-                const tileY = Math.floor(player.y);
+function onPointerLockChange() {
+    if (document.pointerLockElement) {
+        console.log('Pointer locked');
+    } else {
+        console.log('Pointer unlocked');
+    }
+}
 
-                if (world[tileY] && world[tileY][tileX] === 1) { // Only place on grass
-                    world[tileY][tileX] = 0; // Place wood
-                    inventory.wood -= 1;
-                    document.getElementById('woodCount').innerText = inventory.wood;
-                    drawWorld();
-                }
-            }
-        }
+function animate() {
+    requestAnimationFrame(animate);
 
-        // Start the game
-        document.getElementById('playButton').addEventListener('click', () => {
-            world = generateWorld(player.x, player.y);  // Generate initial world
-            drawWorld();  // Draw the world
+    // Player movement
+    let forward = player.speed * Math.cos(camera.rotation.y);
+    let right = player.speed * Math.sin(camera.rotation.y);
+    
+    if (keys.forward) {
+        camera.position.z -= forward; // Move forward in camera direction
+        camera.position.x -= right; 
+    }
+    if (keys.backward) {
+        camera.position.z += forward; // Move backward in camera direction
+        camera.position.x += right; 
+    }
+    if (keys.left) {
+        camera.position.x -= player.speed * Math.cos(camera.rotation.y + Math.PI / 2); // Strafe left
+        camera.position.z -= player.speed * Math.sin(camera.rotation.y + Math.PI / 2);
+    }
+    if (keys.right) {
+        camera.position.x += player.speed * Math.cos(camera.rotation.y + Math.PI / 2); // Strafe right
+        camera.position.z += player.speed * Math.sin(camera.rotation.y + Math.PI / 2);
+    }
 
-            // Start keyboard event listeners
-            document.addEventListener('keydown', (event) => {
-                switch (event.key) {
-                    case 'w':
-                        movePlayer(0, -1);
-                        break;
-                    case 'a':
-                        movePlayer(-1, 0);
-                        break;
-                    case 's':
-                        movePlayer(0, 1);
-                        break;
-                    case 'd':
-                        movePlayer(1, 0);
-                        break;
-                    case 'e':
-                        toggleInventory();
-                        break;
-                }
-            });
+    // Check for collision with blocks to allow walking up
+    camera.position.y = player.height; // Keep player at a certain height
 
-            // Mouse event listeners
-            canvas.addEventListener('mousedown', (event) => {
-                const rect = canvas.getBoundingClientRect();
-                const mouseX = Math.floor((event.clientX - rect.left) / TILE_SIZE);
-                const mouseY = Math.floor((event.clientY - rect.top) / TILE_SIZE);
-                collectTargetX = mouseX + player.x - VIEW_DISTANCE;
-                collectTargetY = mouseY + player.y - VIEW_DISTANCE;
-
-                if (world[collectTargetY] && world[collectTargetY][collectTargetX] === 3) {
-                    startCollecting();
-                }
-            });
-
-            canvas.addEventListener('mouseup', stopCollecting);
-            canvas.addEventListener('contextmenu', (event) => {
-                event.preventDefault(); // Prevent context menu
-                placeWood();
-            });
-
-            // Show inventory when opened
-            function toggleInventory() {
-                const inventoryDiv = document.getElementById('inventory');
-                inventoryDiv.style.display = inventoryDiv.style.display === 'none' ? 'block' : 'none';
-            }
-        });
-    </script>
-</body>
-</html>
+    renderer.render(scene, camera);
+}
