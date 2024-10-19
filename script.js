@@ -38,6 +38,7 @@ function init() {
     generateTerrain();
 
     camera.position.set(0, player.height, 5);
+    document.body.requestPointerLock(); // Enable pointer lock on game start
 }
 
 function handleKey(event, isPressed) {
@@ -54,7 +55,10 @@ function onMouseMove(event) {
     if (document.pointerLockElement) {
         yaw -= event.movementX * lookSensitivity;
         pitch -= event.movementY * lookSensitivity;
-        pitch = Math.max(-Math.PI / 2, Math.min(Math.PI / 2, pitch));
+
+        // Clamp pitch to prevent flipping upside down
+        pitch = Math.max(-Math.PI / 2 + 0.01, Math.min(Math.PI / 2 - 0.01, pitch));
+        
         camera.rotation.order = "YXZ"; // Set rotation order
         camera.rotation.set(pitch, yaw, 0); // Apply the pitch and yaw
     }
@@ -117,10 +121,28 @@ function animate() {
     requestAnimationFrame(animate);
 
     // Player movement
-    if (keys.forward) camera.position.z -= player.speed * Math.cos(camera.rotation.y);
-    if (keys.backward) camera.position.z += player.speed * Math.cos(camera.rotation.y);
-    if (keys.left) camera.position.x -= player.speed * Math.sin(camera.rotation.y);
-    if (keys.right) camera.position.x += player.speed * Math.sin(camera.rotation.y);
+    let forward = player.speed * Math.cos(camera.rotation.y);
+    let right = player.speed * Math.sin(camera.rotation.y);
+    
+    if (keys.forward) {
+        camera.position.z -= forward; // Move forward in camera direction
+        camera.position.x -= right; 
+    }
+    if (keys.backward) {
+        camera.position.z += forward; // Move backward in camera direction
+        camera.position.x += right; 
+    }
+    if (keys.left) {
+        camera.position.x -= player.speed * Math.cos(camera.rotation.y + Math.PI / 2); // Strafe left
+        camera.position.z -= player.speed * Math.sin(camera.rotation.y + Math.PI / 2);
+    }
+    if (keys.right) {
+        camera.position.x += player.speed * Math.cos(camera.rotation.y + Math.PI / 2); // Strafe right
+        camera.position.z += player.speed * Math.sin(camera.rotation.y + Math.PI / 2);
+    }
+
+    // Check for collision with blocks to allow walking up
+    camera.position.y = player.height; // Keep player at a certain height
 
     renderer.render(scene, camera);
 }
