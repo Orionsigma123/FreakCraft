@@ -7,6 +7,11 @@ let keys = { forward: false, backward: false, left: false, right: false };
 // Simplex noise for terrain generation
 let noise = new SimplexNoise();
 
+// Camera rotation variables
+let yaw = 0;
+let pitch = 0;
+const lookSensitivity = 0.002; // Adjust sensitivity as needed
+
 init();
 animate();
 
@@ -45,15 +50,14 @@ function handleKey(event, isPressed) {
 }
 
 function onMouseMove(event) {
-    // Handle mouse movement for camera rotation
-    let movementX = event.movementX || event.mozMovementX || event.webkitMovementX || 0;
-    let movementY = event.movementY || event.mozMovementY || event.webkitMovementY || 0;
-
-    camera.rotation.y -= movementX * player.turnSpeed;
-    camera.rotation.x -= movementY * player.turnSpeed;
-    
-    // Limit vertical camera rotation
-    camera.rotation.x = Math.max(-Math.PI / 2, Math.min(Math.PI / 2, camera.rotation.x));
+    // Handle mouse movement for camera rotation using pitch and yaw
+    if (document.pointerLockElement) {
+        yaw -= event.movementX * lookSensitivity;
+        pitch -= event.movementY * lookSensitivity;
+        pitch = Math.max(-Math.PI / 2, Math.min(Math.PI / 2, pitch));
+        camera.rotation.order = "YXZ"; // Set rotation order
+        camera.rotation.set(pitch, yaw, 0); // Apply the pitch and yaw
+    }
 }
 
 function generateTerrain() {
