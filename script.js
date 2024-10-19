@@ -136,25 +136,40 @@ function animate() {
     let forward = player.speed * Math.cos(camera.rotation.y);
     let right = player.speed * Math.sin(camera.rotation.y);
     
+    let nextPosX = camera.position.x;
+    let nextPosZ = camera.position.z;
+
     if (keys.forward) {
-        camera.position.z -= forward; // Move forward in camera direction
-        camera.position.x -= right; 
+        nextPosX -= right; // Move forward in camera direction
+        nextPosZ -= forward; 
     }
     if (keys.backward) {
-        camera.position.z += forward; // Move backward in camera direction
-        camera.position.x += right; 
+        nextPosX += right; // Move backward in camera direction
+        nextPosZ += forward; 
     }
     if (keys.left) {
-        camera.position.x -= player.speed * Math.cos(camera.rotation.y + Math.PI / 2); // Strafe left
-        camera.position.z -= player.speed * Math.sin(camera.rotation.y + Math.PI / 2);
+        nextPosX -= player.speed * Math.cos(camera.rotation.y + Math.PI / 2); // Strafe left
+        nextPosZ -= player.speed * Math.sin(camera.rotation.y + Math.PI / 2);
     }
     if (keys.right) {
-        camera.position.x += player.speed * Math.cos(camera.rotation.y + Math.PI / 2); // Strafe right
-        camera.position.z += player.speed * Math.sin(camera.rotation.y + Math.PI / 2);
+        nextPosX += player.speed * Math.cos(camera.rotation.y + Math.PI / 2); // Strafe right
+        nextPosZ += player.speed * Math.sin(camera.rotation.y + Math.PI / 2);
     }
 
-    // Check for collision with blocks to allow walking up
-    camera.position.y = player.height; // Keep player at a certain height
+    // Check for collision and adjust height to walk up blocks
+    let raycaster = new THREE.Raycaster(camera.position.clone().setY(1), new THREE.Vector3(0, -1, 0));
+    let intersects = raycaster.intersectObjects(scene.children);
+
+    if (intersects.length > 0) {
+        let block = intersects[0];
+        if (block.object) {
+            // Adjust the camera's Y position to be on top of the block
+            camera.position.y = block.point.y + player.height; // Place the camera on top of the block
+        }
+    }
+
+    camera.position.x = nextPosX;
+    camera.position.z = nextPosZ;
 
     renderer.render(scene, camera);
 }
