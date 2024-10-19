@@ -59,13 +59,31 @@ function onMouseMove(event) {
 function generateTerrain() {
     let geometry = new THREE.BoxGeometry(1, 1, 1);
     let loader = new THREE.TextureLoader();
-    let blockTexture = loader.load('Textures/grass.png'); // Ensure you have the texture in the folder
-    let material = new THREE.MeshBasicMaterial({ map: blockTexture });
 
+    // Load textures from the "textures" folder
+    let grassTexture = loader.load('textures/grass.png', undefined, undefined, (err) => {
+        console.error('Error loading grass texture:', err);
+    });
+    let dirtTexture = loader.load('textures/dirt.png', undefined, undefined, (err) => {
+        console.error('Error loading dirt texture:', err);
+    });
+    let stoneTexture = loader.load('textures/stone.png', undefined, undefined, (err) => {
+        console.error('Error loading stone texture:', err);
+    });
+
+    // Create terrain using the loaded textures
     for (let x = -10; x < 10; x++) {
         for (let z = -10; z < 10; z++) {
             let height = Math.floor(noise.noise2D(x / 10, z / 10) * 5);
             for (let y = 0; y < height; y++) {
+                let material;
+                // Randomly assign a texture (this can be modified as needed)
+                if (y === 0) {
+                    material = new THREE.MeshBasicMaterial({ map: grassTexture });
+                } else {
+                    material = new THREE.MeshBasicMaterial({ map: dirtTexture });
+                }
+
                 let block = new THREE.Mesh(geometry, material);
                 block.position.set(x, y, z);
                 scene.add(block);
