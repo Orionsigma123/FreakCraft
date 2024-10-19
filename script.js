@@ -33,12 +33,17 @@ function init() {
     document.addEventListener('keyup', (event) => handleKey(event, false));
     document.addEventListener('mousemove', onMouseMove);
     window.addEventListener('click', onClick);
+    document.addEventListener('pointerlockchange', onPointerLockChange); // Listen for pointer lock change
     
+    // Request pointer lock when clicking the canvas
+    document.body.addEventListener('click', () => {
+        document.body.requestPointerLock(); // Lock the mouse pointer
+    });
+
     // Generate terrain
     generateTerrain();
 
     camera.position.set(0, player.height, 5);
-    document.body.requestPointerLock(); // Enable pointer lock on game start
 }
 
 function handleKey(event, isPressed) {
@@ -51,8 +56,7 @@ function handleKey(event, isPressed) {
 }
 
 function onMouseMove(event) {
-    // Handle mouse movement for camera rotation using pitch and yaw
-    if (document.pointerLockElement) {
+    if (document.pointerLockElement) { // Only move the camera if pointer is locked
         yaw -= event.movementX * lookSensitivity;
         pitch -= event.movementY * lookSensitivity;
 
@@ -114,6 +118,14 @@ function onClick(event) {
     if (intersects.length > 0) {
         let block = intersects[0].object;
         scene.remove(block);  // Simulate block breaking
+    }
+}
+
+function onPointerLockChange() {
+    if (document.pointerLockElement) {
+        console.log('Pointer locked');
+    } else {
+        console.log('Pointer unlocked');
     }
 }
 
